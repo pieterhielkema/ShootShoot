@@ -14,12 +14,20 @@
 		#hud button { border: 0; background: none; font: inherit; cursor: pointer; }
 		#dead { position: fixed; z-index: 3; inset: 0; display: none; padding: 50px; text-align: center; color: #fff; background: rgba(0, 0, 0, 0.4); cursor: pointer; }
 		#dead h1 { margin-bottom: 20px; }
+		#start { position: fixed; z-index: 4; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.6); cursor: default; }
+		#start form { width: 100%; max-width: 320px; padding: 24px; border-radius: 8px; background: #fff; text-align: center; }
+		#start h1 { margin-bottom: 16px; font-size: 24px; }
+		#start input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
+		#start p { min-height: 18px; margin: 6px 0; color: #c0392b; font-size: 13px; }
+		#start button { padding: 10px 24px; border: 0; border-radius: 5px; font: inherit; font-weight: bold; color: #fff; background: #27ae60; cursor: pointer; }
+		#start button:disabled { opacity: 0.5; cursor: default; }
+		#start #cancel { margin-left: 8px; color: #333; background: #ddd; }
 		#fire { position: fixed; z-index: 2; right: 20px; bottom: 20px; width: 80px; height: 80px; display: none; border: 0; border-radius: 50%; font-size: 32px; background: rgba(0, 0, 0, 0.5); }
 	</style>
 </head>
 <body>
 	<canvas id="c"></canvas>
-	<div id="hud">
+	<div id="hud" style="display: none;">
 		<div id="hp"><div id="hpFill"></div></div>
 		<span>🎾 <b id="ammo">0</b></span>
 		<span>👥 <b id="count">0</b></span>
@@ -30,6 +38,14 @@
 		<p>Click to play again</p>
 	</div>
 	<button id="fire">🎾</button>
+	<div id="start">
+		<form id="form" novalidate>
+			<h1>ShootShoot</h1>
+			<input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" autofocus>
+			<p id="error"></p>
+			<button id="play" disabled>Play</button><button id="cancel" type="button" style="display: none;">Cancel</button>
+		</form>
+	</div>
 
 	<script>
 		'use strict';
@@ -59,6 +75,8 @@
 		let camX = 0, camY = 0;
 		let angle = 0, sentAngle = null, lastLookSent = 0;
 		let walking = false;
+		let myName = null;           // last name we joined with
+		let inGame = false;          // joined on the current connection
 
 		/*
 		 *  Canvas sizing
@@ -169,8 +187,19 @@
 
 		const connect = () => {
 			ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+			ws.onopen = () => {
+				// Rejoin automatically after a reconnect
+				if (myName !== null)
+					send(['j', myName]);
+				$('play').disabled = false;
+			};
 			ws.onmessage = (event) => handle(JSON.parse(event.data));
-			ws.onclose = () => { ws = null; setTimeout(connect, 1000); };
+			ws.onclose = () => {
+				ws = null;
+				inGame = false;
+				$('play').disabled = true;
+				setTimeout(connect, 1000);
+			};
 		};
 
 		const handle = (m) => {
@@ -181,6 +210,13 @@
 					return;
 				case 'd':
 					return setDead(true);
+				case 'e':
+					showForm(inGame);
+					$('error').textContent = m[1];
+					$('play').disabled = false;
+					return;
+				case 'n':
+					return joined(m[1]);
 				case 'w': {
 					let metaFlat, itemsFlat;
 					[, myId, mapW, mapH, ballSpeed, , metaFlat, itemsFlat] = m;
@@ -196,10 +232,8 @@
 					for (let i = 0; i < itemsFlat.length; i += 4)
 						items.set(itemsFlat[i], [itemsFlat[i + 1], itemsFlat[i + 2], itemsFlat[i + 3]]);
 
-					let name = null;
-					try { name = localStorage.getItem('name'); } catch {}
-					if (name)
-						send(['n', name]);
+					inGame = true;
+					joined(m[8]);
 					setDead(false);
 					return;
 				}
@@ -388,7 +422,7 @@
 		const isWalkKey = (key) => key === 'w' || key === 'W' || key === 'ArrowUp';
 
 		document.addEventListener('keydown', (e) => {
-			if (alive && isWalkKey(e.key))
+			if (alive && !formOpen && isWalkKey(e.key))
 				setWalking(true);
 		});
 		document.addEventListener('keyup', (e) => {
@@ -422,12 +456,53 @@
 		if (window.matchMedia('(pointer: coarse)').matches)
 			$('fire').style.display = 'block';
 
-		$('name').addEventListener('click', () => {
-			const name = prompt('Your name:');
-			if (name === null)
-				return;
+		/*
+		 *  Name form: shown before joining, and from the ⚙️ button to rename
+		 */
+		let formOpen = true;
+		const showForm = (rename) => {
+			formOpen = true;
+			setWalking(false);
+			$('cancel').style.display = rename ? 'inline-block' : 'none';
+			$('play').textContent = rename ? 'Save' : 'Play';
+			$('error').textContent = '';
+			$('start').style.display = 'flex';
+			$('nameInput').focus();
+		};
+		const hideForm = () => {
+			formOpen = false;
+			$('start').style.display = 'none';
+			$('nameInput').blur();
+		};
+		const joined = (name) => {
+			myName = name;
 			try { localStorage.setItem('name', name); } catch {}
-			send(['n', name]);
+			hideForm();
+		};
+
+		try { $('nameInput').value = localStorage.getItem('name') || ''; } catch {}
+
+		$('form').addEventListener('submit', (e) => {
+			e.preventDefault();
+			const name = $('nameInput').value.replace(/\s+/g, ' ').trim();
+			if (name === '') {
+				$('error').textContent = 'Please enter a name';
+				return;
+			}
+			if (inGame && name === myName) {
+				hideForm();
+				return;
+			}
+			$('error').textContent = '';
+			$('play').disabled = true;
+			send([inGame ? 'n' : 'j', name]);
+			if (inGame)
+				$('play').disabled = false;
+		});
+		$('cancel').addEventListener('click', hideForm);
+		$('name').addEventListener('click', () => {
+			$('nameInput').value = myName || '';
+			showForm(true);
 		});
 
 		$('dead').addEventListener('click', () => {

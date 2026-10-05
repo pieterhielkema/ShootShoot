@@ -2,7 +2,7 @@ import http from 'http';
 import { readFileSync } from 'fs';
 import { gzipSync } from 'zlib';
 import { WebSocketServer } from 'ws';
-import { Game, ITEM_TYPES, MAP_WIDTH, MAP_HEIGHT, TICK_RATE, BALL_SPEED } from './game.js';
+import { Game, ITEM_TYPES, MAP_WIDTH, MAP_HEIGHT, TICK_RATE, BALL_SPEED, cleanName } from './game.js';
 
 const port = process.env.PORT || 3000;
 
@@ -99,12 +99,8 @@ setInterval(() => {
  *  Connections
  */
 wss.on('connection', (ws) => {
-    const p = game.addPlayer();
-    sockets.set(p.id, ws);
+    let p = null; // created once the client joins with a valid name
     ws.isAlive = true;
-
-    send(ws, ['w', p.id, MAP_WIDTH, MAP_HEIGHT, BALL_SPEED, ITEM_TYPES.map(t => t.emoji),
-        game.snapshotMeta(), game.snapshotItems()]);
 
     ws.on('pong', () => { ws.isAlive = true; });
 
@@ -114,16 +110,40 @@ wss.on('connection', (ws) => {
         if (!Array.isArray(m))
             return;
 
+        // Before joining, only a join is accepted
+        if (p === null) {
+            if (m[0] !== 'j')
+                return;
+            const name = cleanName(m[1]);
+            const error = game.checkName(name);
+            if (error !== null) {
+                send(ws, ['e', error]);
+                return;
+            }
+            p = game.addPlayer(name);
+            sockets.set(p.id, ws);
+            send(ws, ['w', p.id, MAP_WIDTH, MAP_HEIGHT, BALL_SPEED, ITEM_TYPES.map(t => t.emoji),
+                game.snapshotMeta(), game.snapshotItems(), p.name]);
+            return;
+        }
+
         switch (m[0]) {
             case 'k': game.setWalking(p, m[1]); break;   // walk forward on/off
             case 'l': game.setAngle(p, m[1]); break;     // look angle (radians)
             case 'f': game.shoot(p); break;              // fire
-            case 'n': game.setName(p, m[1]); break;      // set name
             case 'r': game.respawn(p); break;            // play again
+            case 'n': {                                  // rename
+                const name = cleanName(m[1]);
+                const error = game.setName(p, name);
+                send(ws, error === null ? ['n', name] : ['e', error]);
+                break;
+            }
         }
     });
 
     ws.on('close', () => {
+        if (p === null)
+            return;
         sockets.delete(p.id);
         game.removePlayer(p);
     });

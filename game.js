@@ -40,6 +40,8 @@ export const ITEM_TYPES = [
     { emoji: '🥎', life: 50, consume: true,  apply: (p) => { p.ammo += 10; p.statsDirty = true; } },
 ];
 
+export const cleanName = (name) => typeof name === 'string' ? name.replace(/\s+/g, ' ').trim().slice(0, 16) : '';
+
 const rand = (min, max) => min + Math.random() * (max - min);
 const clamp = (v, min, max) => v < min ? min : v > max ? max : v;
 
@@ -170,10 +172,24 @@ export class Game {
     /*
      *  Player functions
      */
-    addPlayer() {
+    /*
+     *  Returns an error message, or null when the name can be used
+     */
+    checkName(name, except = null) {
+        if (name === '')
+            return 'Please enter a name';
+        const lower = name.toLowerCase();
+        for (const p of this.players.values()) {
+            if (p !== except && p.name.toLowerCase() === lower)
+                return 'That name is already taken';
+        }
+        return null;
+    }
+
+    addPlayer(name) {
         const p = {
             id: this.nextId++,
-            name: '',
+            name,
             color: COLORS[Math.floor(Math.random() * COLORS.length)],
             x: 0, y: 0, a: 0,
             hp: 0, ammo: 0, range: 0,
@@ -222,11 +238,13 @@ export class Game {
     }
 
     setName(p, name) {
-        if (typeof name !== 'string')
-            return;
-        p.name = name.trim().slice(0, 16);
+        const error = this.checkName(name, p);
+        if (error !== null)
+            return error;
+        p.name = name;
         if (p.alive)
             this.events.meta.push(p.id, p.name, p.color);
+        return null;
     }
 
     setWalking(p, walking) {

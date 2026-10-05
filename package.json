@@ -1,11 +1,16 @@
 {
-  "name": "project-4",
-  "version": "0.0.1",
+  "name": "shootshoot",
+  "version": "0.1.0",
   "description": "Simple Online Game",
   "type": "module",
-  "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^2.3.0"
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
   },
-  "main": "index.js"
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
 }

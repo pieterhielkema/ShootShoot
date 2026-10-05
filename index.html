@@ -2,219 +2,440 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<title>Project 4</title>
-	<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0'>
-
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css">
+	<title>ShootShoot</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<style>
-		* { -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none;
-			user-select: none; padding: 0; margin: 0; box-sizing: border-box; outline: none; color: inherit; text-decoration: inherit; -webkit-appearance : none; -moz-appearance : none; -webkit-font-smoothing: antialiased; }
-		*:not(h1, h2, h3, h4, h5, h6) { font-size: inherit; font-family: inherit; }
-		html,
-		body { width: 100%; height: 100%; background: #1d1d1d; cursor: crosshair; font-family: sans-serif; }
-		#app { width: 100%; height: 100%; overflow: hidden; position: relative; }
-		#map { background: #DADADA url(assets/img/grass.jpg); position: relative; }
-
-		.youdied { z-index: 100; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, 0.4); text-align: center; padding: 50px; color: #fff; }
-		.youdied h1 { margin-bottom: 20px; }
-
-		.joystick { transform: rotate(45deg); z-index: 40; position: absolute; bottom: 10px; left: 10px; width: 134px; overflow: hidden; border-radius: 50%; }
-		.joystick .piece { width: 65px; height: 65px; float: left; background: linear-gradient(135deg, #4c4c4c 0%,#595959 12%,#666666 25%,#474747 39%,#2c2c2c 50%,#000000 51%,#111111 60%,#2b2b2b 76%,#1c1c1c 91%,#131313 100%); margin: 1px; }
+		* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+		html, body { width: 100%; height: 100%; overflow: hidden; background: #1d1d1d; font: 14px/1.2 system-ui, sans-serif; cursor: crosshair; touch-action: none; }
+		canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+		#hud { position: fixed; z-index: 2; top: 0; left: 5px; display: flex; align-items: center; gap: 16px; background: #fff; border-radius: 0 0 5px 5px; padding: 10px; }
+		#hp { width: 250px; max-width: 35vw; height: 20px; border-radius: 3px; overflow: hidden; background: red; }
+		#hpFill { height: 100%; background: green; transform-origin: left; }
+		#hud button { border: 0; background: none; font: inherit; cursor: pointer; }
+		#dead { position: fixed; z-index: 3; inset: 0; display: none; padding: 50px; text-align: center; color: #fff; background: rgba(0, 0, 0, 0.4); cursor: pointer; }
+		#dead h1 { margin-bottom: 20px; }
+		#fire { position: fixed; z-index: 2; right: 20px; bottom: 20px; width: 80px; height: 80px; display: none; border: 0; border-radius: 50%; font-size: 32px; background: rgba(0, 0, 0, 0.5); }
 	</style>
 </head>
 <body>
-	<div id="app">
-		<!-- My health -->
-		<div v-if="me !== null && me.health > 0" style="position: absolute; z-index: 40; top: 0; left: 5px; display: flex; background: white; border-radius: 0 0 5px 5px; padding: 10px;">
-			<div style="width: 250px; height: 20px; border-radius: 3px; overflow: hidden; background: red;">
-				<div style="float: left; height: 20px; background: green;" :style="{ width: me.health + '%' }"></div>
-			</div>
-			<p style="margin: 0 10px 0 20px;"><i class="fas fa-fire-alt" style="color: indigo;"></i> &nbsp;{{ me.balls.regular }} &nbsp;&nbsp;&nbsp; <i class="fas fa-users" style="color: orange;"></i> &nbsp;{{ Object.keys(map.players).length }} &nbsp;&nbsp;&nbsp; <span style="cursor:pointer;" @click.stop="setName"><i class="fas fa-cog"></i></span></p>
-		</div>
-		<div v-else class="youdied">
-			<h1>You lost!</h1>
-			<p>Refresh the page to start again</p>
-		</div>
-
-		<div v-if="isMobile" class="joystick">
-			<div class="top piece" @click.stop @touchstart.stop="keyDown({ key: 'w' })" @touchend="keyUp({ key: 'w' })"></div>
-			<div class="right piece" @click.stop @touchstart.stop="keyDown({ key: 'd' })" @touchend="keyUp({ key: 'd' })"></div>
-			<div class="left piece" @click.stop @touchstart.stop="keyDown({ key: 'a' })" @touchend="keyUp({ key: 'a' })"></div>
-			<div class="bottom piece" @click.stop @touchstart.stop="keyDown({ key: 's' })" @touchend="keyUp({ key: 's' })"></div>
-		</div>
-
-		<template v-if="map !== null">
-			<div id="map" :style="{ width: map.width + 'px', height: map.height + 'px', marginLeft: (moveWindowX - 25) + 'px', marginTop: (moveWindowY - 25) + 'px' }">
-
-				<div class="player-wrap" v-for="player in map.players" style="z-index: 30; position: absolute;" :style="{ left: player.x + 'px', top: player.y + 'px' }">
-					<div class="player"
-						 style="overflow: hidden; border-radius: 10px;"
-						 :style="{ background: player.color, transform: 'rotate(' + player.lookingDirection + 'deg)',
-					 width: player.width + 'px', height: player.height + 'px' }">
-						<div style="width: 12px; height: 12px; background: #1d1d1d; border-radius: 6px; position: absolute; left: 10px; top: 6px;">
-							<div style="width: 6px; height: 6px; background: white; border-radius: 3px; position: absolute; left: 3px; top: 1.5px;"></div>
-						</div>
-						<div style="width: 12px; height: 12px; background: #1d1d1d; border-radius: 6px; position: absolute; right: 10px; top: 6px;">
-							<div style="width: 6px; height: 6px; background: white; border-radius: 3px; position: absolute; left: 3px; top: 1.5px;"></div>
-						</div>
-						<div style="width: 12px; height: 12px; background: #ffc6c3; border-radius: 6px; position: absolute; right: 19px; top: -8px;"></div>
-					</div>
-					<div class="name" v-if="player.name" style="border-radius: 3px; color: white; padding: 3px 4px; background: rgba(0, 0, 0, 0.5); font-size: 10px; text-align: center; position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);">
-						{{ player.name }}
-					</div>
-				</div>
-
-				<div class="ball"
-					 v-for="ball in map.objects"
-					 style="position: absolute; border-radius: 50%; z-index: 25; font-size: 40px;"
-					 :style="{ background: ball.emoji ? '' : ball.color, left: ball.x + 'px', top: ball.y + 'px', width: ball.width + 'px', height: ball.height + 'px' }">
-					{{ ball.emoji ?? "" }}
-				</div>
-			</div>
-		</template>
+	<canvas id="c"></canvas>
+	<div id="hud">
+		<div id="hp"><div id="hpFill"></div></div>
+		<span>🎾 <b id="ammo">0</b></span>
+		<span>👥 <b id="count">0</b></span>
+		<button id="name" title="Set name">⚙️</button>
 	</div>
+	<div id="dead">
+		<h1>You lost!</h1>
+		<p>Click to play again</p>
+	</div>
+	<button id="fire">🎾</button>
 
-	<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
-	<script src="/socket.io/socket.io.js"></script>
 	<script>
-		window.io = io();
-		window._ = _;
-		const app = new Vue({
-			el: '#app',
-			data() {
-				return {
-					socket: null,
-					map: null,
-					me: null,
+		'use strict';
 
-					// For sending moving direction
-					moveKeys: {
-						up: false,
-						right: false,
-						down: false,
-						left: false
-					},
+		const INTERP_MS = 60;        // render others slightly in the past for smooth movement
+		const LOOK_SEND_MS = 33;     // max rate for sending look direction
+		const PLAYER_SIZE = 50;
+		const SPRITE_SCALE = 2;      // sprites are cached at 2x for sharp rendering
 
-					// Position the player in the middle
-					moveWindowX: 0,
-					moveWindowY: 0,
+		const $ = (id) => document.getElementById(id);
+		const canvas = $('c');
+		const ctx = canvas.getContext('2d', { alpha: false });
 
-					// For sending the looking direction
-					lookingDirection: 0,
-					updateLookFunction: window._.throttle(() => { this.updateLook(); }, 100)
-				}
-			},
-			mounted() {
-				this.socket = window.io;
-				this.socket.on('updateMap', this.updateMap);
-				this.socket.on('updateMe', this.updateMe);
+		/*
+		 *  State
+		 */
+		let ws = null;
+		let myId = 0, mapW = 2000, mapH = 2000, ballSpeed = 3000;
+		let alive = false;
+		let itemSprites = [];
+		const meta = new Map();      // id -> { name, sprite, labelWidth }
+		const items = new Map();     // id -> [type, x, y]
+		let snaps = [];              // { t, players: Map(id -> [x, y, a, hp]) }
+		let balls = [];              // { x, y, dx, dy, start, life }
+		let timeOffset = null;       // local time - server time (lowest seen)
 
-				document.onkeydown = this.keyDown;
-				document.onkeyup = this.keyUp;
-				document.onmousemove = this.mouseMove;
-				document.onclick = this.mouseClick;
-			},
-			methods: {
-				/*
-				 * Server methods
-				 */
-				updateMap(data) {
-					this.map = data;
-					this.updateMePosition();
-				},
-				updateMe(data) {
-					this.me = data;
-				},
-				updateMePosition() {
-					if(this.me !== null && this.me !== undefined && this.map.players[this.me.id] !== undefined) {
-						this.moveWindowX = -this.map.players[this.me.id].x + (window.innerWidth / 2);
-						this.moveWindowY = -this.map.players[this.me.id].y + (window.innerHeight / 2);
-					}
-				},
+		let camX = 0, camY = 0;
+		let angle = 0, sentAngle = null, lastLookSent = 0;
+		let walking = false;
 
+		/*
+		 *  Canvas sizing
+		 */
+		let dpr = 1, vw = 0, vh = 0;
+		const resize = () => {
+			dpr = Math.min(window.devicePixelRatio || 1, 2);
+			vw = window.innerWidth;
+			vh = window.innerHeight;
+			canvas.width = Math.round(vw * dpr);
+			canvas.height = Math.round(vh * dpr);
+		};
+		window.addEventListener('resize', resize);
+		resize();
 
-				/*
-				 * Client methods
-				 */
-				setName() {
-					var name = prompt("Your name:");
+		let grass = null;
+		const grassImg = new Image();
+		grassImg.onload = () => { grass = ctx.createPattern(grassImg, 'repeat'); };
+		grassImg.src = 'assets/img/grass.jpg';
 
-					if(name !== null)
-						this.socket.emit('setName', name);
-				},
-				keyDown(event) {
-					switch (event.key) {
-						case "a":
-						case "ArrowLeft":
-							this.moveKeys.left = true;
-							break;
-						case "d":
-						case "ArrowRight":
-							this.moveKeys.right = true;
-							break;
-						case "w":
-						case "ArrowUp":
-							this.moveKeys.up = true;
-							break;
-						case "s":
-						case "ArrowDown":
-							this.moveKeys.down = true;
-							break;
-					}
-					this.socket.emit('move', this.moveKeys);
-				},
-				keyUp(event) {
-					switch (event.key) {
-						case "a":
-						case "ArrowLeft":
-							this.moveKeys.left = false;
-							break;
-						case "d":
-						case "ArrowRight":
-							this.moveKeys.right = false;
-							break;
-						case "w":
-						case "ArrowUp":
-							this.moveKeys.up = false;
-							break;
-						case "s":
-						case "ArrowDown":
-							this.moveKeys.down = false;
-							break;
-					}
-					this.socket.emit('move', this.moveKeys);
-				},
-				mouseMove(event) {
-					if(this.me === null || this.me === undefined)
-						return;
+		/*
+		 *  Sprite cache: drawn once per color / item type, then blitted
+		 */
+		const makeCanvas = (size) => {
+			const c = document.createElement('canvas');
+			c.width = c.height = size * SPRITE_SCALE;
+			const g = c.getContext('2d');
+			g.scale(SPRITE_SCALE, SPRITE_SCALE);
+			return [c, g];
+		};
 
-					let x = (event.clientX - (window.innerWidth / 2));
-					let y = (event.clientY - (window.innerHeight / 2));
-					this.lookingDirection = 360 - (180 + (Math.atan2(x, y) * (180.0 / Math.PI)));
-					this.updateLookFunction();
-				},
-				updateLook() {
-					if(this.me === null || this.me === undefined)
-						return;
+		const roundRect = (g, x, y, w, h, r) => {
+			g.beginPath();
+			g.moveTo(x + r, y);
+			g.arcTo(x + w, y, x + w, y + h, r);
+			g.arcTo(x + w, y + h, x, y + h, r);
+			g.arcTo(x, y + h, x, y, r);
+			g.arcTo(x, y, x + w, y, r);
+			g.closePath();
+		};
 
-					this.socket.emit('look', this.lookingDirection);
-				},
-				mouseClick() {
-					if(this.me === null || this.me === undefined)
-						return;
+		const circle = (g, x, y, r, color) => {
+			g.fillStyle = color;
+			g.beginPath();
+			g.arc(x, y, r, 0, Math.PI * 2);
+			g.fill();
+		};
 
-					this.socket.emit('shoot');
-				}
-			},
-			computed: {
-				isMobile: () => {
-					let check = false;
-					(function(a){if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4))) check = true;})(navigator.userAgent||navigator.vendor||window.opera);
-					return check;
+		const spriteCache = new Map();
+		const playerSprite = (color) => {
+			let sprite = spriteCache.get(color);
+			if (sprite !== undefined)
+				return sprite;
+
+			const [c, g] = makeCanvas(PLAYER_SIZE);
+			roundRect(g, 0, 0, PLAYER_SIZE, PLAYER_SIZE, 10);
+			g.fillStyle = color;
+			g.fill();
+			g.clip();
+			circle(g, 16, 12, 6, '#1d1d1d');
+			circle(g, 34, 12, 6, '#1d1d1d');
+			circle(g, 16, 10.5, 3, '#fff');
+			circle(g, 34, 10.5, 3, '#fff');
+			circle(g, 25, -2, 6, '#ffc6c3');
+			spriteCache.set(color, c);
+			return c;
+		};
+
+		const itemSprite = (emoji) => {
+			const [c, g] = makeCanvas(40);
+			g.font = '32px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+			g.textAlign = 'center';
+			g.textBaseline = 'middle';
+			g.fillText(emoji, 20, 22);
+			return c;
+		};
+
+		const setMeta = (id, name, color) => {
+			ctx.font = '10px system-ui, sans-serif';
+			meta.set(id, { name, sprite: playerSprite(color), labelWidth: name ? ctx.measureText(name).width + 8 : 0 });
+		};
+
+		/*
+		 *  HUD (DOM only touched when a value changes)
+		 */
+		const hud = { hp: -1, ammo: -1, count: -1 };
+		const setHud = (key, value, apply) => {
+			if (hud[key] !== value) {
+				hud[key] = value;
+				apply(value);
+			}
+		};
+		const setDead = (dead) => {
+			alive = !dead;
+			$('dead').style.display = dead ? 'block' : 'none';
+			$('hud').style.display = dead ? 'none' : 'flex';
+			if (dead)
+				setWalking(false);
+		};
+
+		/*
+		 *  Networking
+		 */
+		const send = (msg) => {
+			if (ws !== null && ws.readyState === WebSocket.OPEN)
+				ws.send(JSON.stringify(msg));
+		};
+
+		const connect = () => {
+			ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+			ws.onmessage = (event) => handle(JSON.parse(event.data));
+			ws.onclose = () => { ws = null; setTimeout(connect, 1000); };
+		};
+
+		const handle = (m) => {
+			switch (m[0]) {
+				case 's': return onSnapshot(m);
+				case 'm':
+					setHud('ammo', m[1], v => { $('ammo').textContent = v; });
+					return;
+				case 'd':
+					return setDead(true);
+				case 'w': {
+					let metaFlat, itemsFlat;
+					[, myId, mapW, mapH, ballSpeed, , metaFlat, itemsFlat] = m;
+					itemSprites = m[5].map(itemSprite);
+					meta.clear();
+					items.clear();
+					snaps = [];
+					balls = [];
+					timeOffset = null;
+					sentAngle = null;
+					for (let i = 0; i < metaFlat.length; i += 3)
+						setMeta(metaFlat[i], metaFlat[i + 1], metaFlat[i + 2]);
+					for (let i = 0; i < itemsFlat.length; i += 4)
+						items.set(itemsFlat[i], [itemsFlat[i + 1], itemsFlat[i + 2], itemsFlat[i + 3]]);
+
+					let name = null;
+					try { name = localStorage.getItem('name'); } catch {}
+					if (name)
+						send(['n', name]);
+					setDead(false);
+					return;
 				}
 			}
+		};
+
+		const onSnapshot = ([, t, P, B, itemsAdded, itemsRemoved, metaFlat, left]) => {
+			const now = performance.now();
+
+			// Track the smallest local - server offset seen so jitter doesn't shake the interpolation
+			const offset = now - t;
+			if (timeOffset === null || offset < timeOffset)
+				timeOffset = offset;
+			else
+				timeOffset += (offset - timeOffset) * 0.002;
+
+			for (const id of left)
+				meta.delete(id);
+			for (let i = 0; i < metaFlat.length; i += 3)
+				setMeta(metaFlat[i], metaFlat[i + 1], metaFlat[i + 2]);
+			for (let i = 0; i < itemsAdded.length; i += 4)
+				items.set(itemsAdded[i], [itemsAdded[i + 1], itemsAdded[i + 2], itemsAdded[i + 3]]);
+			for (const id of itemsRemoved)
+				items.delete(id);
+			for (let i = 0; i < B.length; i += 4) {
+				const a = B[i + 2] / 100;
+				balls.push({ x: B[i], y: B[i + 1], dx: Math.cos(a), dy: Math.sin(a), start: now, life: B[i + 3] / ballSpeed * 1000 });
+			}
+
+			const players = new Map();
+			for (let i = 0; i < P.length; i += 5)
+				players.set(P[i], [P[i + 1], P[i + 2], P[i + 3] / 100, P[i + 4]]);
+			snaps.push({ t, players });
+			if (snaps.length > 30)
+				snaps.shift();
+
+			setHud('count', players.size, v => { $('count').textContent = v; });
+			const me = players.get(myId);
+			if (me !== undefined)
+				setHud('hp', me[3], v => { $('hpFill').style.transform = 'scaleX(' + Math.max(0, v) / 100 + ')'; });
+		};
+
+		/*
+		 *  Interpolation
+		 */
+		const lerpAngle = (a, b, f) => {
+			let d = b - a;
+			if (d > Math.PI) d -= Math.PI * 2;
+			else if (d < -Math.PI) d += Math.PI * 2;
+			return a + d * f;
+		};
+
+		// Returns [[id, x, y, a, hp], ...] at server time `rt`
+		const playersAt = (rt) => {
+			const n = snaps.length;
+			if (n === 0)
+				return [];
+
+			let i = n - 1;
+			while (i > 0 && snaps[i - 1].t > rt)
+				i--;
+			// Drop snapshots we'll never need again
+			if (i > 1) {
+				snaps.splice(0, i - 1);
+				i = 1;
+			}
+
+			const to = snaps[i];
+			const from = i > 0 ? snaps[i - 1] : to;
+			const f = to.t === from.t ? 1 : Math.max(0, Math.min(1, (rt - from.t) / (to.t - from.t)));
+			const out = [];
+			for (const [id, b] of to.players) {
+				const a = from.players.get(id);
+				if (a === undefined || f >= 1)
+					out.push([id, b[0], b[1], b[2], b[3]]);
+				else
+					out.push([id, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, lerpAngle(a[2], b[2], f), b[3]]);
+			}
+			return out;
+		};
+
+		/*
+		 *  Rendering
+		 */
+		const frame = (now) => {
+			requestAnimationFrame(frame);
+
+			// Send look direction at a capped rate, only when it changed
+			if (alive && angle !== sentAngle && now - lastLookSent > LOOK_SEND_MS) {
+				sentAngle = angle;
+				lastLookSent = now;
+				send(['l', Math.round(angle * 100) / 100]);
+			}
+
+			const players = timeOffset === null ? [] : playersAt(now - timeOffset - INTERP_MS);
+			for (const p of players) {
+				if (p[0] === myId) {
+					camX = p[1];
+					camY = p[2];
+					p[3] = angle; // own rotation is local, no lag
+				}
+			}
+
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			ctx.fillStyle = '#1d1d1d';
+			ctx.fillRect(0, 0, vw, vh);
+
+			const ox = Math.round(vw / 2 - camX);
+			const oy = Math.round(vh / 2 - camY);
+			ctx.translate(ox, oy);
+
+			// Visible area in map coordinates (with margin for sprites)
+			const x0 = -ox - 60, y0 = -oy - 60, x1 = -ox + vw + 60, y1 = -oy + vh + 60;
+
+			// Map, only the visible part
+			const mx = Math.max(0, -ox), my = Math.max(0, -oy);
+			const mw = Math.min(mapW, vw - ox) - mx, mh = Math.min(mapH, vh - oy) - my;
+			if (mw > 0 && mh > 0) {
+				ctx.fillStyle = grass || '#DADADA';
+				ctx.fillRect(mx, my, mw, mh);
+			}
+
+			// Items
+			for (const [type, x, y] of items.values()) {
+				if (x > x0 && x < x1 && y > y0 && y < y1)
+					ctx.drawImage(itemSprites[type], x - 20, y - 20, 40, 40);
+			}
+
+			// Balls (simulated locally from spawn events)
+			ctx.fillStyle = 'orange';
+			ctx.beginPath();
+			let alivei = 0;
+			for (const b of balls) {
+				const age = now - b.start;
+				if (age > b.life)
+					continue;
+				balls[alivei++] = b;
+				const d = Math.max(0, age) / 1000 * ballSpeed;
+				const x = b.x + b.dx * d, y = b.y + b.dy * d;
+				ctx.moveTo(x + 5, y);
+				ctx.arc(x, y, 5, 0, Math.PI * 2);
+			}
+			balls.length = alivei;
+			ctx.fill();
+
+			// Players
+			const half = PLAYER_SIZE / 2;
+			for (const [id, x, y, a] of players) {
+				const m = meta.get(id);
+				if (m === undefined || x < x0 || x > x1 || y < y0 || y > y1)
+					continue;
+				const c = Math.cos(a + Math.PI / 2), s = Math.sin(a + Math.PI / 2);
+				ctx.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, (x + ox) * dpr, (y + oy) * dpr);
+				ctx.drawImage(m.sprite, -half, -half, PLAYER_SIZE, PLAYER_SIZE);
+			}
+
+			// Names
+			ctx.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
+			ctx.font = '10px system-ui, sans-serif';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			for (const [id, x, y] of players) {
+				const m = meta.get(id);
+				if (m === undefined || !m.name || x < x0 || x > x1 || y < y0 || y > y1)
+					continue;
+				ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+				ctx.fillRect(x - m.labelWidth / 2, y + half + 10, m.labelWidth, 16);
+				ctx.fillStyle = '#fff';
+				ctx.fillText(m.name, x, y + half + 18);
+			}
+		};
+		requestAnimationFrame(frame);
+
+		/*
+		 *  Input
+		 */
+		const setWalking = (w) => {
+			if (walking !== w) {
+				walking = w;
+				send(['k', w ? 1 : 0]);
+			}
+		};
+		const aim = (clientX, clientY) => {
+			angle = Math.atan2(clientY - vh / 2, clientX - vw / 2);
+		};
+		const isWalkKey = (key) => key === 'w' || key === 'W' || key === 'ArrowUp';
+
+		document.addEventListener('keydown', (e) => {
+			if (alive && isWalkKey(e.key))
+				setWalking(true);
 		});
+		document.addEventListener('keyup', (e) => {
+			if (isWalkKey(e.key))
+				setWalking(false);
+		});
+		window.addEventListener('blur', () => setWalking(false));
+
+		canvas.addEventListener('pointermove', (e) => aim(e.clientX, e.clientY));
+		canvas.addEventListener('pointerdown', (e) => {
+			aim(e.clientX, e.clientY);
+			if (!alive)
+				return;
+			if (e.pointerType === 'touch')
+				setWalking(true);  // touch: hold to walk towards finger
+			else if (e.button === 0)
+				send(['f']);
+		});
+		const touchEnd = (e) => {
+			if (e.pointerType === 'touch')
+				setWalking(false);
+		};
+		canvas.addEventListener('pointerup', touchEnd);
+		canvas.addEventListener('pointercancel', touchEnd);
+
+		$('fire').addEventListener('pointerdown', (e) => {
+			e.stopPropagation();
+			if (alive)
+				send(['f']);
+		});
+		if (window.matchMedia('(pointer: coarse)').matches)
+			$('fire').style.display = 'block';
+
+		$('name').addEventListener('click', () => {
+			const name = prompt('Your name:');
+			if (name === null)
+				return;
+			try { localStorage.setItem('name', name); } catch {}
+			send(['n', name]);
+		});
+
+		$('dead').addEventListener('click', () => {
+			send(['r']);
+			setDead(false);
+		});
+
+		connect();
 	</script>
 </body>
 </html>
